@@ -1,0 +1,243 @@
+---
+title: "Untitled"
+output: html_document
+---
+
+# Breeding success of Bonelli’s eagle is directly and indirectly impacted by movement
+
+## Effect of intrinsic and extrinsic factors on breeding success 
+We studied three breeding parameters to gain a better understanding of the breeding success of Bonelli’s eagle:  
+ - breeding probability (pair having laid among the pairs present on a breeding site), 
+ - hatching success (pair having at least one hatching among the pairs having laid eggs)
+ - fledging success (pair having fledged at least one young among pairs having hatched at least one egg). 
+ 
+We fitted generalized linear mixed models (GLMM) with a binomial distribution for all breeding parameters to model the relationship between the breeding parameters with intrinsic factors (recruitment) and local weather variables (rainfall, temperature and wind).
+
+We included a random effect for the breeding site to consider inter-breeding site heterogeneity and repeated measurements. 
+
+For each breeding parameter, we chose to study the effects of weather conditions only during the period preceding the event (weather conditions during pre-breeding for breeding probability, during incubation for hatching success, and during rearing for fledging success). 
+
+# Packages and fonctions
+```{r}
+library(ggplot2); library(patchwork)
+
+#### Function to plot predict of LMM models for continuous variables
+plot_predict<-function(var_x_chara, var_x, model, title, x_lab, y_lab, col){
+  
+   df <- ggeffects::ggpredict(model, terms = c(var_x_chara), ci.lvl = 0.95, back.transform = TRUE)
+  
+  mean=mean(var_x)
+  sd=sd(var_x)
+  
+  df$x_unscale<-(df$x * sd) + mean
+  
+  ggplot(df, aes(x_unscale, predicted)) + 
+    geom_line(aes(), color=col) +
+    geom_ribbon(aes(ymin=conf.low, ymax=conf.high), alpha=0.5, fill=c(col))+
+    geom_rug(aes(x_unscale, predicted))+
+    ggtitle(title)+
+    xlab(x_lab)+
+    ylab(y_lab)+
+    theme_minimal()
+}
+
+#### Function to plot predict of LMM models for qualitative variables
+plot_quali<-function(model, terms, title, y_lab, x_lab, color){
+  
+  df <- ggeffects::ggpredict(model, terms = c(terms), ci.lvl = 0.95, back.transform = TRUE)
+  
+  df$x<-as.factor(df$x)
+  ggplot(df, aes(x, predicted, color=x)) +
+    geom_point(size=3, show.legend = F)+
+    geom_errorbar(aes(ymin  = conf.low, 
+                      ymax = conf.high), 
+                  width = .1, size=1, show.legend = F) +
+    scale_color_manual(values=color)+
+    ggtitle(title)+
+    xlab(x_lab)+
+    ylab(y_lab)+
+    theme_minimal()
+}
+
+```
+
+# Data 
+Territory : breeding territory index
+year : year of the breeding event 
+
+recruitment_female : 1 if a new female have recruit on the breeding site, 0 if not
+recruitment_female : 1 if a new male have recruit on the breeding site, 0 if not
+Recruitment : 0 = no recruitment on the breeding site, F = recruitment of a female, M = recruitment of a male, and MF = recruitment of both individuals on a breeding site
+
+breeding_probability : pair having laid among the pairs present on a breeding site
+hatching_success : pair having at least one hatching among the pairs having laid eggs
+fledging_success: pair having fledged at least one young among pairs having hatched at least one egg
+productivity : number of fledging chicks
+
+wind_b2 : number of days with wind speed below 2.5 m/s
+wind_a7 : number of days with wind speed above 7.5 m/s 
+rainfall : cumulative rainfall (in mm) for the period
+min_T : minimum mean daily temperature observed for the period
+max_T : maximum mean daily temperature observed for the period
+
+```{r}
+Breeding<-read.table(here::here(file.path("data/Data_publi", "Breeding_Bonelli.csv")), header=TRUE, sep=",")
+
+Breeding$Site<-as.factor(Breeding$Site)
+summary(Breeding)
+```
+
+### Breeding probability 
+Local weather condition during the pre breeding period 
+```{r}
+breeding_proba <- glmmTMB::glmmTMB(breeding_proba ~ Recruitment 
+                                   + scale(wind_b2_prebreeding) + scale(wind_a7_prebreeding) + scale(rainfall_prebredding) 
+                                   + scale(min_T_prebreeding) + scale(max_T_prebreeding)
+                                   +(1|Site), data=Breeding, family = binomial) 
+                                        
+summary(breeding_proba)
+```
+
+Predicts 
+```{r}
+A<-plot_quali(breeding_proba, "Recruitment", 
+              title="Breeding probability (weather conditions during pre-breeding)", y_lab="Breeding probability",x_lab="Recruitment",
+              color=c( "#00AFBB", "#440154FF", "#702963", "#d90368")) 
+
+B<-plot_predict("wind_b2_prebreeding [all]", 
+                Breeding$wind_b2_prebreeding, 
+                breeding_proba, title="", x_lab=" wind <2.5 m/s", y_lab="Breeding probability", col="#702963")
+
+C<-plot_predict("wind_a7_prebreeding [all]", 
+                Breeding$wind_a7_prebreeding, 
+                breeding_proba, title="", x_lab=" wind >7.5 m/s", y_lab="Breeding probability", col="#702963")
+
+D<-plot_predict("rainfall_prebredding [all]", 
+                Breeding$rainfall_prebredding, 
+                breeding_proba, title="", x_lab="rainfall", y_lab="Breeding probability", col="#702963")
+
+E<-plot_predict("min_T_prebreeding[all]", 
+                Breeding$min_T_prebreeding, 
+                breeding_proba, title="", x_lab=" minimum Temperature", y_lab="Breeding probability", col="#702963")
+
+ff<-plot_predict("max_T_prebreeding [all]", 
+                Breeding$max_T_prebreeding, 
+                breeding_proba, title="", x_lab=" maximum Temperature", y_lab="Breeding probability", col="#702963")
+
+cowplot::plot_grid(A,B,C,D,E, ff,  ncol = 3, nrow = 2)
+
+```
+
+
+### Hatching success 
+Local weather condition during the incubation period 
+
+As we don't have the as we lacked events with recruitment of both male and female, recruitment will only have 3 levels (0 = no recruitment on the breeding site, F = recruitment of a female, M = recruitment of a male)
+
+We only conserve breeding event that have lay at least an egg 
+```{r}
+## New data set with breeding event with a breeding probability of 1
+Data_hatching <-Breeding[Breeding$breeding_proba==1,]
+
+Data_hatching$Recruitment[Data_hatching$Recruitment=="MF"]<-NA
+```
+
+GLMM
+```{r}
+hatching_success <- glmmTMB::glmmTMB(hatching_success ~ Recruitment 
+                                   + scale(wind_b2_incubation) + scale(wind_a7_incubation) + scale(rainfall_incubation) 
+                                   + scale(min_T_incubation) + scale(max_T_incubation)
+                                   +(1|Site), data=Data_hatching, family = binomial) 
+                                        
+summary(hatching_success)
+```
+
+Predicts 
+```{r}
+A<-plot_quali(hatching_success, "Recruitment", 
+              title="Hatching success (weather conditions during incubation)", y_lab="Hatching success",x_lab="Recruitment",
+              color=c( "#00AFBB", "#440154FF", "#702963", "#d90368")) 
+
+B<-plot_predict("wind_b2_incubation [all]", 
+                Data_hatching$wind_b2_incubation, 
+                hatching_success, title="", x_lab=" wind <2.5 m/s", y_lab="Hatching success", col="#702963")
+
+C<-plot_predict("wind_a7_incubation [all]", 
+                Data_hatching$wind_a7_incubation, 
+                hatching_success, title="", x_lab=" wind >7.5 m/s", y_lab="Hatching success", col="#702963")
+
+D<-plot_predict("rainfall_incubation [all]", 
+                Data_hatching$rainfall_incubation, 
+                hatching_success, title="", x_lab="rainfall", y_lab="Hatching success", col="#702963")
+
+E<-plot_predict("min_T_incubation [all]", 
+                Data_hatching$min_T_incubation, 
+                hatching_success, title="", x_lab=" minimum Temperature", y_lab="Hatching success", col="#702963")
+
+ff<-plot_predict("max_T_incubation [all]", 
+                Data_hatching$max_T_incubation, 
+                hatching_success, title="", x_lab=" maximum Temperature", y_lab="Hatching success", col="#702963")
+
+cowplot::plot_grid(A,B,C,D,E, ff,  ncol = 3, nrow = 2)
+
+```
+
+
+
+### Fledging success 
+Local weather condition during the rearing period 
+
+As we don't have the as we lacked events with recruitment of both male and female, recruitment will only have 3 levels (0 = no recruitment on the breeding site, F = recruitment of a female, M = recruitment of a male)
+
+We only conserve breeding event with a positive hatching success
+```{r}
+## New data set with breeding event with a breeding probability of 1
+Data_fledging <-Breeding[Breeding$hatching_success==1,]
+
+Data_fledging$Recruitment[Data_fledging$Recruitment=="MF"]<-NA
+```
+
+GLMM
+```{r}
+fledging_success <- glmmTMB::glmmTMB(fledging_success ~ Recruitment 
+                                   + scale(wind_b2_rearing) + scale(wind_a7_rearing) + scale(rainfall_rearing) 
+                                   + scale(min_T_rearing) + scale(max_T_rearing)
+                                   +(1|Site), data=Data_fledging, family = binomial) 
+                                        
+summary(fledging_success)
+```
+
+Predicts 
+```{r}
+A<-plot_quali(fledging_success, "Recruitment", 
+              title="Fledging success (weather conditions during rearing)", y_lab="Hatching success",x_lab="Recruitment",
+              color=c( "#00AFBB", "#440154FF", "#702963", "#d90368")) 
+
+B<-plot_predict("wind_b2_rearing [all]", 
+                Data_fledging$wind_b2_rearing, 
+                fledging_success, title="", x_lab=" wind <2.5 m/s", y_lab="Hatching success", col="#702963")
+
+C<-plot_predict("wind_a7_rearing [all]", 
+                Data_fledging$wind_a7_rearing, 
+                fledging_success, title="", x_lab=" wind >7.5 m/s", y_lab="Hatching success", col="#702963")
+
+D<-plot_predict("rainfall_rearing [all]", 
+                Data_fledging$rainfall_rearing, 
+               fledging_success, title="", x_lab="rainfall", y_lab="Hatching success", col="#702963")
+
+E<-plot_predict("min_T_rearing [all]", 
+                Data_fledging$min_T_rearing, 
+                fledging_success, title="", x_lab=" minimum Temperature", y_lab="Hatching success", col="#702963")
+
+ff<-plot_predict("max_T_rearing [all]", 
+                Data_fledging$max_T_rearing, 
+                fledging_success, title="", x_lab=" maximum Temperature", y_lab="Hatching success", col="#702963")
+
+cowplot::plot_grid(A,B,C,D,E, ff,  ncol = 3, nrow = 2)
+
+```
+
+
+
+
+

@@ -1,0 +1,219 @@
+---
+title: ''
+output: html_document
+---
+
+# Breeding success of Bonelli’s eagle is directly and indirectly impacted by movement
+
+## Relationship between movement behaviours and productivity
+
+Effect of the three movement behaviours : 
+ - proportion of time in flight
+ - range of movements
+  -straightness of trajectories
+on the productivity, i.e. the probability of having 0, 1 or 2 chicks fledging for of Bonelli's eagle equiped with GPS (65 breeding events on 26 sites). 
+
+To consider the hypothesis that Bonelli’s eagles show different behaviours throughout the breeding season with differences between sexes and period, we fitted several LMMs with sexes separated, and movement behaviours averaged for the pre-breeding, incubation and rearing period. 
+
+As breeding success cannot exceed two (Bonelli’s eagles lay a maximum of two eggs), we considered an LMM with a Gaussian distribution instead of a Poisson distribution, which may produce breeding success higher than two (Mcdonald and White, 2010) . 
+
+# Packages and fonctions
+```{r}
+library(ggplot2); library(patchwork)
+
+#### Function to plot predict of LMM models
+
+plot_predict<-function(var_x_chara, var_x, model, title, x_lab, y_lab, col){
+  
+  df <- ggeffects::ggpredict(model, terms = c(var_x_chara), ci.lvl = 0.95, back.transform = TRUE)
+ 
+  ggplot(df, aes(x, predicted)) + 
+    geom_line(aes(), color=col) +
+    geom_ribbon(aes(ymin=conf.low, ymax=conf.high), alpha=0.5, fill=c(col))+
+    geom_rug(aes(x, predicted))+
+    ggtitle(title)+
+    xlab(x_lab)+
+    ylab(y_lab)+
+    theme_minimal()
+}
+```
+
+# Data 
+id : identification of the individual
+sex : Male or female
+Territory : breeding territory index
+year : year of the breeding event 
+
+breeding_probability : pair having laid among the pairs present on a breeding site
+hatching_success : pair having at least one hatching among the pairs having laid eggs
+fledging_success: pair having fledged at least one young among pairs having hatched at least one egg
+productivity : number of fledging chicks
+
+Individuals movement behaviours averaged for each breeding period (pre-breeding, incubation, rearing)
+ - prop_flight : The proportion of time in flight, calculated as the number of locations in flight over the total number of GPS locations for one day. A bird was considered to be in flight when its speed exceeded 3m/sproportion of time in flight (n_flight/nobs)
+ - range_movement : The range of movement, median distance between all locations recorded in a single day and the first location, presumed to be the individual’s resting point during the night. 
+ - straighness_trajectories : The straightness of trajectories performed during the day (calculated with the function TrajStraighness of the package trajr, McLean and Skowron Volponi, 2018). The closer to 1, the straighter the trajectory.
+
+```{r}
+data<-read.table(here::here(file.path("data/Data_publi", "Movement_breeding_Bonelli.csv")), header=TRUE, sep=",")
+
+summary(data)
+```
+
+
+# MALES 
+```{r}
+#Subset with only males
+Data_M<-data[data$Sex=="M",]
+```
+
+## Pre-Breeding 
+```{r}
+PB_M<-glmmTMB::glmmTMB(productivity~
+                      scale(range_movement_prebreeding) + scale(prop_flight_prebreeding) + scale(straighness_trajectories_prebreeding) 
+                      + (1|id), data=Data_M, family=gaussian)
+summary(PB_M)
+```
+
+## Incubation 
+We only conserve individuals that have lay at least an egg (breeding probability=1)
+
+```{r}
+Data_Hatching_M<-Data_M[Data_M$breeding_proba==1,]
+
+IN_M<-glmmTMB::glmmTMB(productivity~
+                      scale(range_movement_incubation) + scale(prop_flight_incubation) + scale(straighness_trajectories_incubation) 
+                      + (1|id), data=Data_Hatching_M, family=gaussian)
+summary(IN_M)
+```
+
+## Rearing 
+We only conserve breeding event with a positive hatching success
+```{r}
+Data_fledging_M<-Data_Hatching_M[Data_Hatching_M$hatching_success==1,]
+
+R_M<-glmmTMB::glmmTMB(productivity~
+                      scale(range_movement_rearing) + scale(prop_flight_rearing) + scale(straighness_trajectories_rearing) 
+                      + (1|id), data=Data_fledging_M, family=gaussian)
+summary(R_M)
+```
+
+Predicts 
+```{r}
+#Pre breeding
+PB_A<-plot_predict("range_movement_prebreeding", Data_M$range_movement_prebreeding, 
+                PB_M, title="Pre Breeding - Males", x_lab="Range of movement", y_lab="Productivity", col="#26828EFF")
+  
+PB_B<-plot_predict("prop_flight_prebreeding", Data_M$prop_flight_prebreeding, 
+                PB_M, title="", x_lab="% Time in flight", y_lab="Productivity", col="#26828EFF")
+  
+PB_C<-plot_predict("straighness_trajectories_prebreeding", Data_M$straighness_trajectories_prebreeding, 
+                PB_M, title="", x_lab="Straighness of trajectories", y_lab="Productivity", col="#26828EFF")
+  
+#Incubation
+IN_A<-plot_predict("range_movement_incubation", Data_Hatching_M$range_movement_incubation, 
+                IN_M, title="Incubation - Males", x_lab="Range of movement", y_lab="Productivity", col="#26828EFF")
+  
+IN_B<-plot_predict("prop_flight_incubation", Data_Hatching_M$prop_flight_incubation, 
+                IN_M, title="", x_lab="% Time in flight", y_lab="Productivity", col="#26828EFF")
+  
+IN_C<-plot_predict("straighness_trajectories_incubation", Data_Hatching_M$straighness_trajectories_incubation, 
+                IN_M, title="", x_lab="Straighness of trajectories", y_lab="Productivity", col="#26828EFF")
+  
+#Rearing
+R_A<-plot_predict("range_movement_rearing", Data_fledging_M$range_movement_rearing, 
+                R_M, title="Rearing - Males", x_lab="Range of movement", y_lab="Productivity", col="#26828EFF")
+  
+R_B<-plot_predict("prop_flight_rearing", Data_fledging_M$prop_flight_rearing, 
+                R_M, title="", x_lab="% Time in flight", y_lab="Productivity", col="#26828EFF")
+  
+R_C<-plot_predict("straighness_trajectories_rearing", Data_fledging_M$straighness_trajectories_rearing, 
+                R_M, title="", x_lab="Straighness of trajectories", y_lab="Productivity", col="#26828EFF")
+
+cowplot::plot_grid(PB_A, PB_B, PB_C, 
+                   IN_A, IN_B, IN_C, 
+                   R_A, R_B, R_C, ncol=3, nrow=3)
+
+```
+
+# FEMALES 
+```{r}
+#Subset with only females
+Data_F<-data[data$Sex=="F",]
+```
+
+## Pre-Breeding 
+```{r}
+PB_F<-glmmTMB::glmmTMB(productivity~
+                      scale(range_movement_prebreeding) + scale(prop_flight_prebreeding) + scale(straighness_trajectories_prebreeding) 
+                      + (1|id), data=Data_F, family=gaussian)
+summary(PB_F)
+```
+
+## Incubation 
+We only conserve individuals that have lay at least an egg (breeding probability=1)
+
+```{r}
+Data_Hatching_F<-Data_F[Data_F$breeding_proba==1,]
+
+IN_F<-glmmTMB::glmmTMB(productivity~
+                      scale(range_movement_incubation) + scale(prop_flight_incubation) + scale(straighness_trajectories_incubation) 
+                      + (1|id), data=Data_Hatching_F, family=gaussian)
+summary(IN_F)
+```
+
+## Rearing 
+We only conserve breeding event with a positive hatching success
+```{r}
+Data_fledging_F<-Data_Hatching_F[Data_Hatching_F$hatching_success==1,]
+
+R_F<-glmmTMB::glmmTMB(productivity~
+                      scale(range_movement_rearing) + scale(prop_flight_rearing) + scale(straighness_trajectories_rearing) 
+                      + (1|id), data=Data_fledging_F, family=gaussian)
+summary(R_F)
+```
+
+Predicts 
+```{r}
+#Pre breeding
+PB_A<-plot_predict("range_movement_prebreeding", Data_F$range_movement_prebreeding, 
+                PB_F, title="Pre Breeding - Females", x_lab="Range of movement", y_lab="Productivity", col="#26828EFF")
+  
+PB_B<-plot_predict("prop_flight_prebreeding", Data_F$prop_flight_prebreeding, 
+                PB_F, title="", x_lab="% Time in flight", y_lab="Productivity", col="#26828EFF")
+  
+PB_C<-plot_predict("straighness_trajectories_prebreeding", Data_F$straighness_trajectories_prebreeding, 
+                PB_F, title="", x_lab="Straighness of trajectories", y_lab="Productivity", col="#26828EFF")
+  
+#Incubation
+IN_A<-plot_predict("range_movement_incubation", Data_Hatching_M$range_movement_incubation, 
+                IN_F, title="Incubation - Females", x_lab="Range of movement", y_lab="Productivity", col="#26828EFF")
+  
+IN_B<-plot_predict("prop_flight_incubation", Data_Hatching_M$prop_flight_incubation, 
+                IN_M, title="", x_lab="% Time in flight", y_lab="Productivity", col="#26828EFF")
+  
+IN_C<-plot_predict("straighness_trajectories_incubation", Data_Hatching_M$straighness_trajectories_incubation, 
+                IN_M, title="", x_lab="Straighness of trajectories", y_lab="Productivity", col="#26828EFF")
+  
+#Rearing
+R_A<-plot_predict("range_movement_rearing", Data_fledging_F$range_movement_rearing, 
+                R_F, title="Rearing - Females", x_lab="Range of movement", y_lab="Productivity", col="#26828EFF")
+  
+R_B<-plot_predict("prop_flight_rearing", Data_fledging_F$prop_flight_rearing, 
+                R_F, title="", x_lab="% Time in flight", y_lab="Productivity", col="#26828EFF")
+  
+R_C<-plot_predict("straighness_trajectories_rearing", Data_fledging_F$straighness_trajectories_rearing, 
+                R_F, title="", x_lab="Straighness of trajectories", y_lab="Productivity", col="#26828EFF")
+
+cowplot::plot_grid(PB_A, PB_B, PB_C, 
+                   IN_A, IN_B, IN_C, 
+                   R_A, R_B, R_C, ncol=3, nrow=3)
+
+```
+
+
+
+
+
+
+

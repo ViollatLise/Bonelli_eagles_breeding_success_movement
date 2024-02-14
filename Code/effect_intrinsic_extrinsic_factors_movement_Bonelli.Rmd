@@ -1,0 +1,754 @@
+---
+title: ""
+output: html_document
+---
+
+# Breeding success of Bonelli’s eagle is directly and indirectly impacted by movement
+
+## Effect of intrinsic and extrinsic factors on movement behaviours
+Linear mixed models to estimate the relationships between the three proxies of movement behaviors of Bonelli's eagle (proportion of time in flight, range of movements [log-transformed] and straightness [logit-transformed]) with intrinsic factors and local weather conditions at a daily scale. 
+
+We fitted a model for each of the three defined periods (pre-breeding, incubation and rearing) for each sex. 
+
+We included an individual random effect (a unique ID for each bird) in the models to consider individual heterogeneity and repeated measurements. 
+
+Several fixed effects were included in the models to assess their effects on intrinsic factors and local weather conditions on movement behaviours: 
+ - the number of years that an individual has spent on its breeding site (used as a proxy of the individual’s experience as well as its age and recruitment on the breeding site)
+ - the daily rainfall (mm). 
+ - the mean daily wind speed (m/s). We added quadratic terms for wind speed, on the hypothesis that there might be optimal wind speed conditions that allow individuals to browse longer distances, pass more time in flight and make active searching movements with less energy expense.
+ - the mean daily temperature (°C).  
+ 
+To avoid potential bias from over- or underestimates due to the number of GPS locations, we also assessed the effects of this number on the range of movements and on straightness, as the number of locations was not standardized for each day and for each individual. The number of GPS locations was included in the calculation of the proportion of time in flight, so was not added in the models. All variables were considered in addition.
+
+# Packages and fonctions
+```{r}
+library(ggplot2); library(patchwork)
+
+#### Function to plot predict of LMM models
+
+plot_predict<-function(var_x_chara, var_x, model, title, x_lab, y_lab, col){
+  
+  df <- ggeffects::ggpredict(model, terms = c(var_x_chara), ci.lvl = 0.95, back.transform = TRUE)
+ 
+  ggplot(df, aes(x, predicted)) + 
+    geom_line(aes(), color=col) +
+    geom_ribbon(aes(ymin=conf.low, ymax=conf.high), alpha=0.5, fill=c(col))+
+    geom_rug(aes(x, predicted))+
+    ggtitle(title)+
+    xlab(x_lab)+
+    ylab(y_lab)+
+    theme_minimal()
+}
+```
+
+
+# GLMM on the Proprotion of time in flight
+
+### Data 
+id : identification of the individual
+Breeding period: pre-breeding, incubation, rearing
+sex : Male or female
+
+nobs : number of GPS locations available for this date
+n_flight : number of GPS locations where the individuals is considered in flight (speed > 3 m/s)
+prop_time_flight : proportion of time in flight (n_flight/nobs)
+
+n_year_on_site: the number of years that an individual has spent on its breeding site (used as a proxy of the individual’s experience as well as its age and recruitment on the breeding site)
+
+laying : breeding probability of the individual for the breeding year (1 if at least an egg has been laid, 0 if none)
+hatching: hatching success of the individual for the breeding year (1 if at least an egg has hatched, 0 if none)
+Breeding_success: number of fledging chicks 
+
+```{r}
+prop_flight<-read.table(here::here(file.path("data/Data_publi", "Proportion_time_flight_Bonelli.csv")), header=TRUE, sep=",")
+summary(prop_flight)
+```
+
+### Pre-breeding 
+```{r}
+#subset with only the pre breeding period 
+prop_flight_PB<-prop_flight[prop_flight$breeding_period=="pre_breeding",] 
+prop_flight_PB$id<-as.factor(prop_flight_PB$id)
+
+```
+
+Model for females 
+```{r}
+PB_F<-glmmTMB::glmmTMB(cbind(n_flight, nobs-n_flight) ~ scale(n_year_on_site) + scale(rainfall) + scale(mean_temperature)+ 
+                         + scale(wind) + scale(I(wind^2))+(1|id), 
+                       data = prop_flight_PB[prop_flight_PB$sex=="F",], family = binomial)
+summary(PB_F)
+```
+
+Model for males
+```{r}
+PB_M<-glmmTMB::glmmTMB(cbind(n_flight, nobs-n_flight) ~ scale(n_year_on_site) + scale(rainfall) + scale(mean_temperature)+ 
+                         + scale(wind) + scale(I(wind^2))+(1|id), 
+                       data = prop_flight_PB[prop_flight_PB$sex=="M",], family = binomial)
+summary(PB_M)
+```
+
+Predict 
+```{r}
+#### FEMALES 
+A_F <- plot_predict("n_year_on_site [all]", 
+                          prop_flight_PB[prop_flight_PB$sex=="F",]$n_year_on_site, 
+                               PB_F, title="Pre-Breeding - FEMALE",   x_lab="number of years \n on breeding site" ,  y_lab="% time in flight", col="#FFBF00")
+
+B_F <- plot_predict("rainfall [all]", 
+                          prop_flight_PB[prop_flight_PB$sex=="F",]$rainfall, 
+                               PB_F, title="",   x_lab="rainfall" ,  y_lab="% time in flight", col="#FFBF00")
+
+C_F <- plot_predict("mean_temperature [all]", 
+                          prop_flight_PB[prop_flight_PB$sex=="F",]$mean_temperature, 
+                               PB_F, title="",   x_lab="mean temperature" ,  y_lab="% time in flight", col="#FFBF00")
+
+D_F <- plot_predict("wind [all]", 
+                          prop_flight_PB[prop_flight_PB$sex=="F",]$wind, 
+                               PB_F, title="wind",   x_lab="wind" ,  y_lab="% time in flight", col="#FFBF00")
+
+#### MALES 
+A_M <- plot_predict("n_year_on_site [all]", 
+                          prop_flight_PB[prop_flight_PB$sex=="M",]$n_year_on_site, 
+                               PB_M, title="Pre-Breeding - MALE",   x_lab="number of years \n on breeding site" ,  y_lab="% time in flight", col="#26828EFF")
+
+B_M <- plot_predict("rainfall [all]", 
+                          prop_flight_PB[prop_flight_PB$sex=="M",]$rainfall, 
+                               PB_M, title="",   x_lab="rainfall" ,  y_lab="% time in flight", col="#26828EFF")
+
+C_M <- plot_predict("mean_temperature [all]", 
+                          prop_flight_PB[prop_flight_PB$sex=="M",]$mean_temperature,  
+                               PB_M, title="",   x_lab="mean temperature" ,  y_lab="% time in flight", col="#26828EFF")
+
+D_M <- plot_predict("wind [all]", 
+                          prop_flight_PB[prop_flight_PB$sex=="M",]$wind, 
+                               PB_M, title="wind",   x_lab="wind" ,  y_lab="% time in flight", col="#26828EFF")
+
+cowplot::plot_grid( A_F, B_F, C_F, D_F,
+                    A_M, B_M, C_M, D_M,
+                   ncol = 4, nrow = 2)
+```
+
+### Incubation
+```{r}
+#subset with only the incubation period 
+prop_flight_IN<-prop_flight[prop_flight$breeding_period=="incubation",] 
+prop_flight_IN$id<-as.factor(prop_flight_IN$id)
+
+```
+
+Model for females 
+```{r}
+IN_F<-glmmTMB::glmmTMB(cbind(n_flight, nobs-n_flight) ~ scale(n_year_on_site) + scale(rainfall) + scale(mean_temperature)+ 
+                         + scale(wind) + scale(I(wind^2))+(1|id), 
+                       data = prop_flight_IN[prop_flight_IN$sex=="F",], family = binomial)
+summary(IN_F)
+```
+
+Model for males
+```{r}
+IN_M<-glmmTMB::glmmTMB(cbind(n_flight, nobs-n_flight) ~ scale(n_year_on_site) + scale(rainfall) + scale(mean_temperature)+ 
+                         + scale(wind) + scale(I(wind^2))+(1|id), 
+                       data = prop_flight_IN[prop_flight_IN$sex=="M",], family = binomial)
+summary(IN_M)
+```
+
+Predict 
+```{r}
+#### FEMALES 
+A_F <- plot_predict("n_year_on_site [all]", 
+                          prop_flight_IN[prop_flight_IN$sex=="F",]$n_year_on_site,  
+                               IN_F, title="Incubation - FEMALE",   x_lab="number of years \n on breeding site" ,  y_lab="% time in flight", col="#FFBF00")
+
+B_F <- plot_predict("rainfall [all]", 
+                          prop_flight_IN[prop_flight_IN$sex=="F",]$rainfall, 
+                               IN_F, title="",   x_lab="rainfall" ,  y_lab="% time in flight", col="#FFBF00")
+
+C_F <- plot_predict("mean_temperature [all]", 
+                          prop_flight_IN[prop_flight_IN$sex=="F",]$mean_temperature, 
+                               IN_F, title="",   x_lab="mean temperature" ,  y_lab="% time in flight", col="#FFBF00")
+
+D_F <- plot_predict("wind [all]", 
+                          prop_flight_IN[prop_flight_IN$sex=="F",]$wind, 
+                               IN_F, title="wind",   x_lab="wind" ,  y_lab="% time in flight", col="#FFBF00")
+
+#### MALES 
+A_M <- plot_predict("n_year_on_site [all]", 
+                          prop_flight_IN[prop_flight_IN$sex=="M",]$n_year_on_site, 
+                               IN_M, title="Incubation - MALE",   x_lab="number of years on \n breeding site" ,  y_lab="% time in flight", col="#26828EFF")
+
+B_M <- plot_predict("rainfall [all]", 
+                          prop_flight_IN[prop_flight_IN$sex=="M",]$rainfall, 
+                               IN_M, title="",   x_lab="rainfall" ,  y_lab="% time in flight", col="#26828EFF")
+
+C_M <- plot_predict("mean_temperature [all]", 
+                          prop_flight_IN[prop_flight_IN$sex=="M",]$mean_temperature, 
+                               IN_M, title="",   x_lab="mean temperature" ,  y_lab="% time in flight", col="#26828EFF")
+
+D_M <- plot_predict("wind [all]", 
+                          prop_flight_IN[prop_flight_IN$sex=="M",]$wind, 
+                               IN_M, title="wind",   x_lab="wind" ,  y_lab="% time in flight", col="#26828EFF")
+
+cowplot::plot_grid( A_F, B_F, C_F, D_F,
+                    A_M, B_M, C_M, D_M,
+                   ncol = 4, nrow = 2)
+```
+
+### Rearing
+```{r}
+#subset with only the rearing period 
+prop_flight_R<-prop_flight[prop_flight$breeding_period=="rearing",] 
+prop_flight_R$id<-as.factor(prop_flight_R$id)
+
+```
+
+Model for females 
+```{r}
+R_F<-glmmTMB::glmmTMB(cbind(n_flight, nobs-n_flight) ~ scale(n_year_on_site) + scale(rainfall) + scale(mean_temperature)+ 
+                         + scale(wind) + scale(I(wind^2))+(1|id), 
+                       data = prop_flight_R[prop_flight_R$sex=="F",], family = binomial)
+summary(R_F)
+```
+
+Model for males
+```{r}
+R_M<-glmmTMB::glmmTMB(cbind(n_flight, nobs-n_flight) ~ scale(n_year_on_site) + scale(rainfall) + scale(mean_temperature)+ 
+                         + scale(wind) + scale(I(wind^2))+(1|id), 
+                       data = prop_flight_R[prop_flight_R$sex=="M",], family = binomial)
+summary(R_M)
+```
+
+Predict 
+```{r}
+#### FEMALES 
+A_F <- plot_predict("n_year_on_site [all]", 
+                          prop_flight_R[prop_flight_R$sex=="F",]$n_year_on_site,  
+                               R_F, title="Incubation - FEMALE",   x_lab="number of years \n on breeding site" ,  y_lab="% time in flight", col="#FFBF00")
+
+B_F <- plot_predict("rainfall [all]", 
+                          prop_flight_R[prop_flight_R$sex=="F",]$rainfall, 
+                               R_F, title="",   x_lab="rainfall" ,  y_lab="% time in flight", col="#FFBF00")
+
+C_F <- plot_predict("mean_temperature [all]", 
+                          prop_flight_R[prop_flight_R$sex=="F",]$mean_temperature, 
+                               R_F, title="",   x_lab="mean temperature" ,  y_lab="% time in flight", col="#FFBF00")
+
+D_F <- plot_predict("wind [all]", 
+                          prop_flight_R[prop_flight_R$sex=="F",]$wind, 
+                               R_F, title="wind",   x_lab="wind" ,  y_lab="% time in flight", col="#FFBF00")
+
+#### MALES 
+A_M <- plot_predict("n_year_on_site [all]", 
+                          prop_flight_R[prop_flight_R$sex=="M",]$n_year_on_site, 
+                               R_M, title="Incubation - MALE",   x_lab="number of years on \n breeding site" ,  y_lab="% time in flight", col="#26828EFF")
+
+B_M <- plot_predict("rainfall [all]", 
+                          prop_flight_R[prop_flight_R$sex=="M",]$rainfall, 
+                               R_M, title="",   x_lab="rainfall" ,  y_lab="% time in flight", col="#26828EFF")
+
+C_M <- plot_predict("mean_temperature [all]", 
+                          prop_flight_IN[prop_flight_R$sex=="M",]$mean_temperature, 
+                               R_M, title="",   x_lab="mean temperature" ,  y_lab="% time in flight", col="#26828EFF")
+
+D_M <- plot_predict("wind [all]", 
+                          prop_flight_IN[prop_flight_R$sex=="M",]$wind, 
+                               R_M, title="wind",   x_lab="wind" ,  y_lab="% time in flight", col="#26828EFF")
+
+cowplot::plot_grid( A_F, B_F, C_F, D_F,
+                    A_M, B_M, C_M, D_M,
+                   ncol = 4, nrow = 2)
+```
+
+
+# LMM on the Range of movement
+
+### Data 
+id : identification of the individual
+Breeding period: pre-breeding, incubation, rearing
+sex : Male or female
+
+nobs : number of GPS locations available for this date
+range_movement : median distance between all locations recorded in a single day and the first location, presumed to be the individual’s resting point during the night. 
+
+n_year_on_site: the number of years that an individual has spent on its breeding site (used as a proxy of the individual’s experience as well as its age and recruitment on the breeding site)
+
+laying : breeding probability of the individual for the breeding year (1 if at least an egg has been laid, 0 if none)
+hatching: hatching success of the individual for the breeding year (1 if at least an egg has hatched, 0 if none)
+Breeding_success: number of fledging chicks 
+
+```{r}
+range_mouv<-read.table(here::here(file.path("data/Data_publi", "Range_movement_Bonelli.csv")), header=TRUE, sep=",")
+summary(range_mouv)
+```
+
+### Pre-breeding 
+```{r}
+#subset with only the pre breeding period 
+range_mouv_PB<-range_mouv[range_mouv$breeding_period=="pre_breeding",] 
+range_mouv_PB$id<-as.factor(range_mouv_PB$id)
+
+```
+
+Model for females 
+```{r}
+PB_F<-glmmTMB::glmmTMB(log(range_movement) ~ scale(nobs) + scale(n_year_on_site) + scale(rainfall) + scale(mean_temperature)+ 
+                         + scale(wind) + scale(I(wind^2))+(1|id), 
+                       data = range_mouv_PB[range_mouv_PB$sex=="F",], family = gaussian)
+summary(PB_F)
+```
+
+Model for males
+```{r}
+PB_M<-glmmTMB::glmmTMB(log(range_movement) ~ scale(nobs) + scale(n_year_on_site) + scale(rainfall) + scale(mean_temperature)+ 
+                         + scale(wind) + scale(I(wind^2))+(1|id), 
+                       data = range_mouv_PB[range_mouv_PB$sex=="M",], family = gaussian)
+summary(PB_M)
+```
+
+Predict 
+```{r}
+#### FEMALES 
+A_F <- plot_predict("nobs [all]", 
+                          range_mouv_PB[range_mouv_PB$sex=="F",]$nobs, 
+                               PB_F, title="Pre-Breeding - FEMALE",   x_lab="number of GPS locations" ,  y_lab="Range of movement", col="#FFBF00")
+
+B_F <- plot_predict("n_year_on_site [all]", 
+                          range_mouv_PB[range_mouv_PB$sex=="F",]$n_year_on_site, 
+                               PB_F, title="",   x_lab="number of years \n on breeding site" ,  y_lab="Range of movement", col="#FFBF00")
+
+C_F <- plot_predict("rainfall [all]", 
+                          range_mouv_PB[range_mouv_PB$sex=="F",]$rainfall, 
+                               PB_F, title="",   x_lab="rainfall" ,  y_lab="Range of movement", col="#FFBF00")
+
+D_F <- plot_predict("mean_temperature [all]", 
+                          range_mouv_PB[range_mouv_PB$sex=="F",]$mean_temperature, 
+                               PB_F, title="",   x_lab="mean temperature" ,  y_lab="Range of movement", col="#FFBF00")
+
+E_F <- plot_predict("wind [all]", 
+                          range_mouv_PB[range_mouv_PB$sex=="F",]$wind, 
+                               PB_F, title="wind",   x_lab="wind" ,  y_lab="Range of movement", col="#FFBF00")
+
+#### MALES 
+A_M <- plot_predict("nobs [all]", 
+                          range_mouv_PB[range_mouv_PB$sex=="M",]$nobs, 
+                               PB_M, title="Pre-Breeding - MALE",   x_lab="number of GPS locations" ,  y_lab="Range of movement", col="#26828EFF")
+
+
+B_M <- plot_predict("n_year_on_site [all]", 
+                          range_mouv_PB[range_mouv_PB$sex=="M",]$n_year_on_site, 
+                               PB_M, title="",   x_lab="number of years \n on breeding site" ,  y_lab="Range of movement", col="#26828EFF")
+
+C_M <- plot_predict("rainfall [all]", 
+                          range_mouv_PB[range_mouv_PB$sex=="M",]$rainfall, 
+                               PB_M, title="",   x_lab="rainfall" ,  y_lab="Range of movement", col="#26828EFF")
+
+D_M <- plot_predict("mean_temperature [all]", 
+                          range_mouv_PB[range_mouv_PB$sex=="M",]$mean_temperature,  
+                               PB_M, title="",   x_lab="mean temperature" ,  y_lab="Range of movement", col="#26828EFF")
+
+E_M <- plot_predict("wind [all]", 
+                          range_mouv_PB[range_mouv_PB$sex=="M",]$wind, 
+                               PB_M, title="wind",   x_lab="wind" ,  y_lab="Range of movement", col="#26828EFF")
+
+cowplot::plot_grid( A_F, B_F, C_F, D_F,E_F,
+                    A_M, B_M, C_M, D_M,E_M,
+                   ncol = 5, nrow = 2)
+```
+
+### Incubation
+```{r}
+#subset with only the incubation period 
+range_mouv_IN<-range_mouv[range_mouv$breeding_period=="incubation",] 
+range_mouv_IN$id<-as.factor(range_mouv_IN$id)
+
+```
+
+Model for females 
+```{r}
+IN_F<-glmmTMB::glmmTMB(log(range_movement) ~ scale(nobs) + scale(n_year_on_site) + scale(rainfall) + scale(mean_temperature)+ 
+                         + scale(wind) + scale(I(wind^2))+(1|id), 
+                       data = range_mouv_IN[range_mouv_IN$sex=="F",], family = gaussian)
+summary(IN_F)
+```
+
+Model for males
+```{r}
+IN_M<-glmmTMB::glmmTMB(log(range_movement) ~ scale(nobs) + scale(n_year_on_site) + scale(rainfall) + scale(mean_temperature)+ 
+                         + scale(wind) + scale(I(wind^2))+(1|id), 
+                       data = range_mouv_IN[range_mouv_IN$sex=="M",], family = gaussian)
+summary(IN_M)
+```
+
+Predict 
+```{r}
+#### FEMALES 
+#### FEMALES 
+A_F <- plot_predict("nobs [all]", 
+                          range_mouv_IN[range_mouv_IN$sex=="F",]$nobs, 
+                               IN_F, title="Incubation - FEMALE",   x_lab="number of GPS locations" ,  y_lab="Range of movement", col="#FFBF00")
+
+B_F <- plot_predict("n_year_on_site [all]", 
+                          range_mouv_IN[range_mouv_IN$sex=="F",]$n_year_on_site, 
+                               IN_F, title="",   x_lab="number of years \n on breeding site" ,  y_lab="Range of movement", col="#FFBF00")
+
+C_F <- plot_predict("rainfall [all]", 
+                          range_mouv_IN[range_mouv_IN$sex=="F",]$rainfall, 
+                               IN_F, title="",   x_lab="rainfall" ,  y_lab="Range of movement", col="#FFBF00")
+
+D_F <- plot_predict("mean_temperature [all]", 
+                          range_mouv_IN[range_mouv_IN$sex=="F",]$mean_temperature, 
+                               IN_F, title="",   x_lab="mean temperature" ,  y_lab="Range of movement", col="#FFBF00")
+
+E_F <- plot_predict("wind [all]", 
+                          range_mouv_IN[range_mouv_IN$sex=="F",]$wind, 
+                               IN_F, title="wind",   x_lab="wind" ,  y_lab="Range of movement", col="#FFBF00")
+
+#### MALES 
+A_M <- plot_predict("nobs [all]", 
+                          range_mouv_IN[range_mouv_IN$sex=="M",]$nobs, 
+                               IN_M, title="Incubation - MALE",   x_lab="number of GPS locations" ,  y_lab="Range of movement", col="#26828EFF")
+
+
+B_M <- plot_predict("n_year_on_site [all]", 
+                          range_mouv_IN[range_mouv_IN$sex=="M",]$n_year_on_site, 
+                               IN_M, title="",   x_lab="number of years \n on breeding site" ,  y_lab="Range of movement", col="#26828EFF")
+
+C_M <- plot_predict("rainfall [all]", 
+                          range_mouv_IN[range_mouv_IN$sex=="M",]$rainfall, 
+                               IN_M, title="",   x_lab="rainfall" ,  y_lab="Range of movement", col="#26828EFF")
+
+D_M <- plot_predict("mean_temperature [all]", 
+                          range_mouv_IN[range_mouv_IN$sex=="M",]$mean_temperature,  
+                               IN_M, title="",   x_lab="mean temperature" ,  y_lab="Range of movement", col="#26828EFF")
+
+E_M <- plot_predict("wind [all]", 
+                          range_mouv_IN[range_mouv_IN$sex=="M",]$wind, 
+                               IN_M, title="wind",   x_lab="wind" ,  y_lab="Range of movement", col="#26828EFF")
+
+cowplot::plot_grid( A_F, B_F, C_F, D_F,E_F,
+                    A_M, B_M, C_M, D_M,E_M,
+                   ncol = 5, nrow = 2)
+```
+
+### Rearing
+```{r}
+#subset with only the rearing period 
+range_mouv_R<-range_mouv[range_mouv$breeding_period=="rearing",] 
+range_mouv_R$id<-as.factor(range_mouv_R$id)
+
+```
+
+Model for females 
+```{r}
+R_F<-glmmTMB::glmmTMB(log(range_movement) ~ scale(nobs) + scale(n_year_on_site) + scale(rainfall) + scale(mean_temperature)+ 
+                         + scale(wind) + scale(I(wind^2))+(1|id), 
+                       data = range_mouv_R[range_mouv_R$sex=="F",], family = gaussian)
+summary(R_F)
+```
+
+Model for males
+```{r}
+R_M<-glmmTMB::glmmTMB(log(range_movement) ~ scale(nobs) + scale(n_year_on_site) + scale(rainfall) + scale(mean_temperature)+ 
+                         + scale(wind) + scale(I(wind^2))+(1|id), 
+                       data = range_mouv_R[range_mouv_R$sex=="M",], family = gaussian)
+summary(R_M)
+```
+
+Predict 
+```{r}
+#### FEMALES 
+A_F <- plot_predict("nobs [all]", 
+                          range_mouv_R[range_mouv_R$sex=="F",]$nobs, 
+                               R_F, title="Rearing - FEMALE",   x_lab="number of GPS locations" ,  y_lab="Range of movement", col="#FFBF00")
+
+B_F <- plot_predict("n_year_on_site [all]", 
+                          range_mouv_R[range_mouv_R$sex=="F",]$n_year_on_site, 
+                               R_F, title="",   x_lab="number of years \n on breeding site" ,  y_lab="Range of movement", col="#FFBF00")
+
+C_F <- plot_predict("rainfall [all]", 
+                          range_mouv_R[range_mouv_R$sex=="F",]$rainfall, 
+                               R_F, title="",   x_lab="rainfall" ,  y_lab="Range of movement", col="#FFBF00")
+
+D_F <- plot_predict("mean_temperature [all]", 
+                          range_mouv_R[range_mouv_R$sex=="F",]$mean_temperature, 
+                               R_F, title="",   x_lab="mean temperature" ,  y_lab="Range of movement", col="#FFBF00")
+
+E_F <- plot_predict("wind [all]", 
+                          range_mouv_R[range_mouv_R$sex=="F",]$wind, 
+                               R_F, title="wind",   x_lab="wind" ,  y_lab="Range of movement", col="#FFBF00")
+
+#### MALES 
+A_M <- plot_predict("nobs [all]", 
+                          range_mouv_R[range_mouv_R$sex=="M",]$nobs, 
+                               R_M, title="Pre-Breeding - MALE",   x_lab="number of GPS locations" ,  y_lab="Range of movement", col="#26828EFF")
+
+
+B_M <- plot_predict("n_year_on_site [all]", 
+                          range_mouv_R[range_mouv_R$sex=="M",]$n_year_on_site, 
+                               R_M, title="",   x_lab="number of years \n on breeding site" ,  y_lab="Range of movement", col="#26828EFF")
+
+C_M <- plot_predict("rainfall [all]", 
+                          range_mouv_R[range_mouv_R$sex=="M",]$rainfall, 
+                               R_M, title="",   x_lab="rainfall" ,  y_lab="Range of movement", col="#26828EFF")
+
+D_M <- plot_predict("mean_temperature [all]", 
+                          range_mouv_R[range_mouv_R$sex=="M",]$mean_temperature,  
+                               R_M, title="",   x_lab="mean temperature" ,  y_lab="Range of movement", col="#26828EFF")
+
+E_M <- plot_predict("wind [all]", 
+                          range_mouv_R[range_mouv_R$sex=="M",]$wind, 
+                               R_M, title="wind",   x_lab="wind" ,  y_lab="Range of movement", col="#26828EFF")
+
+cowplot::plot_grid( A_F, B_F, C_F, D_F,E_F,
+                    A_M, B_M, C_M, D_M,E_M,
+                   ncol = 5, nrow = 2)
+```
+
+
+# LMM on the Straighness of trajectories
+
+### Data 
+id : identification of the individual
+Breeding period: pre-breeding, incubation, rearing
+sex : Male or female
+
+nobs : number of GPS locations available for this date
+straighness_trajectories : The straightness of trajectories performed during the day (calculated with the function TrajStraighness of the package trajr, McLean and Skowron Volponi, 2018). The closer to 1, the straighter the trajectory.
+
+n_year_on_site: the number of years that an individual has spent on its breeding site (used as a proxy of the individual’s experience as well as its age and recruitment on the breeding site)
+
+laying : breeding probability of the individual for the breeding year (1 if at least an egg has been laid, 0 if none)
+hatching: hatching success of the individual for the breeding year (1 if at least an egg has hatched, 0 if none)
+Breeding_success: number of fledging chicks 
+
+```{r}
+straighness<-read.table(here::here(file.path("data/Data_publi", "Straighness_trajectories_Bonelli.csv")), header=TRUE, sep=",")
+summary(straighness)
+```
+
+### Pre-breeding 
+```{r}
+#subset with only the pre breeding period 
+straighness_PB<-straighness[straighness$breeding_period=="pre_breeding",] 
+straighness_PB$id<-as.factor(straighness_PB$id)
+
+```
+
+Model for females 
+```{r}
+PB_F<-glmmTMB::glmmTMB(car::logit(straighness_trajectories) ~ scale(nobs) + scale(n_year_on_site) + scale(rainfall) + scale(mean_temperature)+ 
+                         + scale(wind) + scale(I(wind^2))+(1|id), 
+                       data = straighness_PB[straighness_PB$sex=="F",], family = gaussian)
+summary(PB_F)
+```
+
+Model for males
+```{r}
+PB_M<-glmmTMB::glmmTMB(car::logit(straighness_trajectories) ~ scale(nobs) + scale(n_year_on_site) + scale(rainfall) + scale(mean_temperature)+ 
+                         + scale(wind) + scale(I(wind^2))+(1|id), 
+                       data = straighness_PB[straighness_PB$sex=="M",], family = gaussian)
+summary(PB_M)
+```
+
+Predict 
+```{r}
+#### FEMALES 
+A_F <- plot_predict("nobs [all]", 
+                          straighness_PB[straighness_PB$sex=="F",]$nobs, 
+                               PB_F, title="Pre-Breeding - FEMALE",   x_lab="number of GPS locations" ,  y_lab="Straighness of trajectories", col="#FFBF00")
+
+B_F <- plot_predict("n_year_on_site [all]", 
+                          straighness_PB[straighness_PB$sex=="F",]$n_year_on_site, 
+                               PB_F, title="",   x_lab="number of years \n on breeding site" ,  y_lab="Straighness of trajectories", col="#FFBF00")
+
+C_F <- plot_predict("rainfall [all]", 
+                          straighness_PB[straighness_PB$sex=="F",]$rainfall, 
+                               PB_F, title="",   x_lab="rainfall" ,  y_lab="Straighness of trajectories", col="#FFBF00")
+
+D_F <- plot_predict("mean_temperature [all]", 
+                          straighness_PB[straighness_PB$sex=="F",]$mean_temperature, 
+                               PB_F, title="",   x_lab="mean temperature" ,  y_lab="Straighness of trajectories", col="#FFBF00")
+
+E_F <- plot_predict("wind [all]", 
+                          straighness_PB[straighness_PB$sex=="F",]$wind, 
+                               PB_F, title="wind",   x_lab="wind" ,  y_lab="Straighness of trajectories", col="#FFBF00")
+
+#### MALES 
+A_M <- plot_predict("nobs [all]", 
+                          straighness_PB[straighness_PB$sex=="M",]$nobs, 
+                               PB_M, title="Pre-Breeding - MALE",   x_lab="number of GPS locations" ,  y_lab="Straighness of trajectories", col="#26828EFF")
+
+
+B_M <- plot_predict("n_year_on_site [all]", 
+                          straighness_PB[straighness_PB$sex=="M",]$n_year_on_site, 
+                               PB_M, title="",   x_lab="number of years \n on breeding site" ,  y_lab="Straighness of trajectories", col="#26828EFF")
+
+C_M <- plot_predict("rainfall [all]", 
+                          straighness_PB[straighness_PB$sex=="M",]$rainfall, 
+                               PB_M, title="",   x_lab="rainfall" ,  y_lab="Straighness of trajectories", col="#26828EFF")
+
+D_M <- plot_predict("mean_temperature [all]", 
+                          straighness_PB[straighness_PB$sex=="M",]$mean_temperature,  
+                               PB_M, title="",   x_lab="mean temperature" ,  y_lab="Straighness of trajectories", col="#26828EFF")
+
+E_M <- plot_predict("wind [all]", 
+                          straighness_PB[straighness_PB$sex=="M",]$wind, 
+                               PB_M, title="wind",   x_lab="wind" ,  y_lab="Straighness of trajectories", col="#26828EFF")
+
+cowplot::plot_grid( A_F, B_F, C_F, D_F,E_F,
+                    A_M, B_M, C_M, D_M,E_M,
+                   ncol = 5, nrow = 2)
+```
+
+### Incubation
+```{r}
+#subset with only the incubation period 
+straighness_IN<-straighness[straighness$breeding_period=="incubation",] 
+straighness_IN$id<-as.factor(straighness_IN$id)
+
+```
+
+Model for females 
+```{r}
+IN_F<-glmmTMB::glmmTMB(car::logit(straighness_trajectories) ~ scale(nobs) + scale(n_year_on_site) + scale(rainfall) + scale(mean_temperature)+ 
+                         + scale(wind) + scale(I(wind^2))+(1|id), 
+                       data = straighness_IN[straighness_IN$sex=="F",], family = gaussian)
+summary(IN_F)
+```
+
+Model for males
+```{r}
+IN_M<-glmmTMB::glmmTMB(car::logit(straighness_trajectories) ~ scale(nobs) + scale(n_year_on_site) + scale(rainfall) + scale(mean_temperature)+ 
+                         + scale(wind) + scale(I(wind^2))+(1|id), 
+                       data = straighness_IN[straighness_IN$sex=="M",], family = gaussian)
+summary(IN_M)
+```
+
+Predict 
+```{r}
+#### FEMALES 
+#### FEMALES 
+A_F <- plot_predict("nobs [all]", 
+                          straighness_IN[straighness_IN$sex=="F",]$nobs, 
+                               IN_F, title="Incubation - FEMALE",   x_lab="number of GPS locations" ,  y_lab="Straighness of trajectories", col="#FFBF00")
+
+B_F <- plot_predict("n_year_on_site [all]", 
+                          straighness_IN[straighness_IN$sex=="F",]$n_year_on_site, 
+                               IN_F, title="",   x_lab="number of years \n on breeding site" ,  y_lab="Straighness of trajectories", col="#FFBF00")
+
+C_F <- plot_predict("rainfall [all]", 
+                          straighness_IN[straighness_IN$sex=="F",]$rainfall, 
+                               IN_F, title="",   x_lab="rainfall" ,  y_lab="Straighness of trajectories", col="#FFBF00")
+
+D_F <- plot_predict("mean_temperature [all]", 
+                          straighness_IN[straighness_IN$sex=="F",]$mean_temperature, 
+                               IN_F, title="",   x_lab="mean temperature" ,  y_lab="Straighness of trajectories", col="#FFBF00")
+
+E_F <- plot_predict("wind [all]", 
+                          straighness_IN[straighness_IN$sex=="F",]$wind, 
+                               IN_F, title="wind",   x_lab="wind" ,  y_lab="Straighness of trajectories", col="#FFBF00")
+
+#### MALES 
+A_M <- plot_predict("nobs [all]", 
+                          straighness_IN[straighness_IN$sex=="M",]$nobs, 
+                               IN_M, title="Incubation - MALE",   x_lab="number of GPS locations" ,  y_lab="Straighness of trajectories", col="#26828EFF")
+
+
+B_M <- plot_predict("n_year_on_site [all]", 
+                          straighness_IN[straighness_IN$sex=="M",]$n_year_on_site, 
+                               IN_M, title="",   x_lab="number of years \n on breeding site" ,  y_lab="Straighness of trajectories", col="#26828EFF")
+
+C_M <- plot_predict("rainfall [all]", 
+                          straighness_IN[straighness_IN$sex=="M",]$rainfall, 
+                               IN_M, title="",   x_lab="rainfall" ,  y_lab="Straighness of trajectories", col="#26828EFF")
+
+D_M <- plot_predict("mean_temperature [all]", 
+                          straighness_IN[straighness_IN$sex=="M",]$mean_temperature,  
+                               IN_M, title="",   x_lab="mean temperature" ,  y_lab="Straighness of trajectories", col="#26828EFF")
+
+E_M <- plot_predict("wind [all]", 
+                          straighness_IN[straighness_IN$sex=="M",]$wind, 
+                               IN_M, title="wind",   x_lab="wind" ,  y_lab="Straighness of trajectories", col="#26828EFF")
+
+cowplot::plot_grid( A_F, B_F, C_F, D_F,E_F,
+                    A_M, B_M, C_M, D_M,E_M,
+                   ncol = 5, nrow = 2)
+```
+
+### Rearing
+```{r}
+#subset with only the rearing period 
+straighness_R<-straighness[straighness$breeding_period=="rearing",] 
+straighness_R$id<-as.factor(straighness_R$id)
+
+```
+
+Model for females 
+```{r}
+R_F<-glmmTMB::glmmTMB(car::logit(straighness_trajectories) ~ scale(nobs) + scale(n_year_on_site) + scale(rainfall) + scale(mean_temperature)+ 
+                         + scale(wind) + scale(I(wind^2))+(1|id), 
+                       data = straighness_R[straighness_R$sex=="F",], family = gaussian)
+summary(R_F)
+```
+
+Model for males
+```{r}
+R_M<-glmmTMB::glmmTMB(car::logit(straighness_trajectories) ~ scale(nobs) + scale(n_year_on_site) + scale(rainfall) + scale(mean_temperature)+ 
+                         + scale(wind) + scale(I(wind^2))+(1|id), 
+                       data = straighness_R[straighness_R$sex=="M",], family = gaussian)
+summary(R_M)
+```
+
+Predict 
+```{r}
+#### FEMALES 
+A_F <- plot_predict("nobs [all]", 
+                          straighness_R[straighness_R$sex=="F",]$nobs, 
+                               R_F, title="Rearing - FEMALE",   x_lab="number of GPS locations" ,  y_lab="Straighness of trajectories", col="#FFBF00")
+
+B_F <- plot_predict("n_year_on_site [all]", 
+                          straighness_R[straighness_R$sex=="F",]$n_year_on_site, 
+                               R_F, title="",   x_lab="number of years \n on breeding site" ,  y_lab="Straighness of trajectories", col="#FFBF00")
+
+C_F <- plot_predict("rainfall [all]", 
+                          straighness_R[straighness_R$sex=="F",]$rainfall, 
+                               R_F, title="",   x_lab="rainfall" ,  y_lab="Straighness of trajectories", col="#FFBF00")
+
+D_F <- plot_predict("mean_temperature [all]", 
+                          straighness_R[straighness_R$sex=="F",]$mean_temperature, 
+                               R_F, title="",   x_lab="mean temperature" ,  y_lab="Straighness of trajectories", col="#FFBF00")
+
+E_F <- plot_predict("wind [all]", 
+                          straighness_R[straighness_R$sex=="F",]$wind, 
+                               R_F, title="wind",   x_lab="wind" ,  y_lab="Straighness of trajectories", col="#FFBF00")
+
+#### MALES 
+A_M <- plot_predict("nobs [all]", 
+                          straighness_R[straighness_R$sex=="M",]$nobs, 
+                               R_M, title="Rearing - MALE",   x_lab="Straighness of trajectories" ,  y_lab="Straighness of trajectories", col="#26828EFF")
+
+
+B_M <- plot_predict("n_year_on_site [all]", 
+                          straighness_R[straighness_R$sex=="M",]$n_year_on_site, 
+                               R_M, title="",   x_lab="number of years \n on breeding site" ,  y_lab="Straighness of trajectories", col="#26828EFF")
+
+C_M <- plot_predict("rainfall [all]", 
+                          straighness_R[straighness_R$sex=="M",]$rainfall, 
+                               R_M, title="",   x_lab="rainfall" ,  y_lab="Straighness of trajectories", col="#26828EFF")
+
+D_M <- plot_predict("mean_temperature [all]", 
+                          straighness_R[straighness_R$sex=="M",]$mean_temperature,  
+                               R_M, title="",   x_lab="mean temperature" ,  y_lab="Straighness of trajectories", col="#26828EFF")
+
+E_M <- plot_predict("wind [all]", 
+                          straighness_R[straighness_R$sex=="M",]$wind, 
+                               R_M, title="wind",   x_lab="wind" ,  y_lab="Straighness of trajectories", col="#26828EFF")
+
+cowplot::plot_grid( A_F, B_F, C_F, D_F,E_F,
+                    A_M, B_M, C_M, D_M,E_M,
+                   ncol = 5, nrow = 2)
+```
+
+
+
+
